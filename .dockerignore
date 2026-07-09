@@ -1,0 +1,14 @@
+**/__pycache__/
+**/*.pyc
+**/.env
+**/storage/
+**/work/
+**/logs/
+**/.venv*/
+**/.setup_*done
+test_local_smoke/
+_duration_trim_smoke/
+_mouth_composite_smoke/
+*.zip
+*.tar
+*.log
