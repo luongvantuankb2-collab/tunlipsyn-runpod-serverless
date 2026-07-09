@@ -1,4 +1,4 @@
-﻿FROM nvidia/cuda:12.4.1-cudnn-devel-ubuntu22.04
+FROM pytorch/pytorch:2.5.1-cuda12.4-cudnn9-devel
 
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONUNBUFFERED=1 \
@@ -21,10 +21,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libsndfile1 \
     libxext6 \
     libxrender1 \
-    python3 \
-    python3-pip \
-    python3-venv \
-    python-is-python3 \
     wget \
     && rm -rf /var/lib/apt/lists/*
 
@@ -34,11 +30,6 @@ COPY web_saas/worker/requirements.txt /tmp/worker-requirements.txt
 COPY web_saas/worker/latentsync-requirements.runtime.txt /tmp/latentsync-requirements.runtime.txt
 
 RUN python -m pip install --upgrade pip wheel "setuptools==81.0.0" \
-    && python -m pip install --no-cache-dir \
-      torch==2.5.1+cu124 \
-      torchvision==0.20.1+cu124 \
-      torchaudio==2.5.1+cu124 \
-      --index-url https://download.pytorch.org/whl/cu124 \
     && python -m pip install --no-cache-dir -r /tmp/requirements.serverless.txt \
     && python -m pip install --no-cache-dir -r /tmp/backend-requirements.txt \
     && python -m pip install --no-cache-dir -r /tmp/worker-requirements.txt \
@@ -57,11 +48,10 @@ RUN python -m pip install --upgrade pip wheel "setuptools==81.0.0" \
       "vieneu==3.0.5" \
       "mediapipe==0.10.11" \
       "insightface==0.7.3" \
-    && python -m pip install --no-cache-dir --force-reinstall \
-      torch==2.5.1+cu124 \
-      torchvision==0.20.1+cu124 \
-      torchaudio==2.5.1+cu124 \
-      --index-url https://download.pytorch.org/whl/cu124
+    && python - <<'PY'
+import torch
+print('torch', torch.__version__, torch.version.cuda)
+PY
 
 COPY web_saas/worker /workspace/tunlipsyn/worker
 COPY voice_models /workspace/tunlipsyn/voice_models
@@ -73,17 +63,16 @@ RUN git clone --depth 1 https://github.com/ByteDance/LatentSync.git /workspace/t
     && /workspace/tunlipsyn/prepare_runpod_models.sh
 
 ENV LATENTSYNC_DIR=/workspace/tunlipsyn/engines/LatentSync \
-    LATENTSYNC_PYTHON=/usr/bin/python \
+    LATENTSYNC_PYTHON=/opt/conda/bin/python \
     LATENTSYNC_MODEL_PRESET=v15 \
     LATENTSYNC_STEPS=40 \
     LATENTSYNC_GUIDANCE=1.8 \
     LATENTSYNC_CROP_SCALE=0.75 \
     LATENTSYNC_PREP_WIDTH=512 \
     VOICE_BACKEND=vieneu \
-    VIENEU_PYTHON=/usr/bin/python \
+    VIENEU_PYTHON=/opt/conda/bin/python \
     VIENEU_SCRIPT=/workspace/tunlipsyn/voice_models/vieneu/tao_giong_nhanh_vieneu.py \
     VIENEU_MODEL_DIR=/workspace/tunlipsyn/voice_models/vieneu/VieNeu-TTS-v3-Turbo
 
 WORKDIR /workspace/tunlipsyn/worker
 CMD ["python", "-u", "serverless_handler.py"]
-
