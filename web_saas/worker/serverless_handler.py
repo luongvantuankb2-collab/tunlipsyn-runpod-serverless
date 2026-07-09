@@ -1,3 +1,4 @@
+import base64
 import os
 import socket
 import sys
@@ -59,6 +60,16 @@ def _download(url: str, destination: Path, worker_token: str) -> None:
                     f.write(chunk)
 
 
+def _download_plain(url: str, destination: Path) -> None:
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    with requests.get(url, stream=True, timeout=600) as response:
+        response.raise_for_status()
+        with destination.open("wb") as f:
+            for chunk in response.iter_content(chunk_size=1024 * 1024):
+                if chunk:
+                    f.write(chunk)
+
+
 def _complete(backend_url: str, worker_token: str, job_id: str, result_path: Path) -> None:
     content_type = "audio/wav" if result_path.suffix.lower() in {".wav", ".mp3", ".m4a", ".aac", ".ogg", ".flac"} else "video/mp4"
     with result_path.open("rb") as f:
@@ -91,6 +102,88 @@ def _claim_job(backend_url: str, worker_token: str, job_id: str) -> dict[str, An
     )
     response.raise_for_status()
     return response.json().get("job")
+
+
+def _collect_logs() -> tuple[list[str], Any]:
+    logs: list[str] = []
+
+    def progress(message: str, percent: int) -> None:
+        line = f"[{percent}] {message}"
+        logs.append(line)
+        print(line, flush=True)
+
+    return logs, progress
+
+
+def _demo_asset(name: str) -> Path:
+    latentsync_dir = Path(os.environ.get("LATENTSYNC_DIR", "/workspace/tunlipsyn/engines/LatentSync"))
+    candidates = [
+        latentsync_dir / "assets" / name,
+        latentsync_dir / "assets" / name.replace("demo1_", "demo_"),
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    raise FileNotFoundError(f"Missing demo asset {name}; checked: {', '.join(str(c) for c in candidates)}")
+
+
+def _result_payload(result_path: Path, logs: list[str], started: float) -> dict[str, Any]:
+    size = result_path.stat().st_size if result_path.exists() else 0
+    payload: dict[str, Any] = {
+        "ok": True,
+        "mode": "direct_test",
+        "result_size": size,
+        "seconds": round(time.time() - started, 3),
+        "logs": logs[-200:],
+    }
+    inline_limit = int(os.environ.get("RUNPOD_INLINE_RESULT_MAX_BYTES", str(18 * 1024 * 1024)))
+    if size and size <= inline_limit:
+        payload["result_base64"] = base64.b64encode(result_path.read_bytes()).decode("ascii")
+        payload["result_mime"] = "video/mp4"
+        payload["result_name"] = result_path.name
+    else:
+        payload["message"] = "Render completed, but result is too large to return inline. Use a backend/storage callback for production."
+    return payload
+
+
+def _direct_lipsync_test(payload: dict[str, Any], started: float) -> dict[str, Any]:
+    job_id = str(payload.get("job_id") or f"direct_{int(started)}")
+    job_dir = WORK_DIR / job_id
+    job_dir.mkdir(parents=True, exist_ok=True)
+    logs, progress = _collect_logs()
+
+    video_url = str(payload.get("video_url") or "").strip()
+    audio_url = str(payload.get("audio_url") or "").strip()
+    video_path = job_dir / "input_video.mp4"
+    audio_path = job_dir / "input_audio.wav"
+    result_path = job_dir / "result.mp4"
+
+    if video_url:
+        progress("Downloading video_url", 5)
+        _download_plain(video_url, video_path)
+    else:
+        progress("Using bundled LatentSync demo video", 5)
+        video_path = _demo_asset("demo1_video.mp4")
+
+    if audio_url:
+        progress("Downloading audio_url", 8)
+        _download_plain(audio_url, audio_path)
+    else:
+        progress("Using bundled LatentSync demo audio", 8)
+        audio_path = _demo_asset("demo1_audio.wav")
+
+    settings = dict(payload.get("settings") or {})
+    settings.setdefault("preset", payload.get("preset") or "v15")
+    settings.setdefault("lipsync_model", payload.get("lipsync_model") or "v15")
+    settings.setdefault("latentsync_steps", str(payload.get("steps") or payload.get("latentsync_steps") or "40"))
+    settings.setdefault("latentsync_guidance", str(payload.get("guidance") or payload.get("latentsync_guidance") or "1.8"))
+    settings.setdefault("crop_scale", str(payload.get("crop_scale") or "0.75"))
+    settings.setdefault("keep_original_frame", "on")
+    settings.setdefault("latentsync_deepcache", "off")
+    settings.setdefault("enhance_video", "off")
+
+    render_lipsync_job(video_path, audio_path, result_path, settings, progress)
+    return _result_payload(result_path, logs, started)
 
 
 def _render_claimed_job(backend_url: str, worker_token: str, job: dict[str, Any]) -> Path:
@@ -164,6 +257,14 @@ def _render_claimed_job(backend_url: str, worker_token: str, job: dict[str, Any]
 def handler(event: dict[str, Any]) -> dict[str, Any]:
     started = time.time()
     payload = event.get("input") or {}
+    if payload.get("self_test") or payload.get("mode") in {"self_test", "direct_lipsync", "direct_test"}:
+        try:
+            return _direct_lipsync_test(payload, started)
+        except Exception as exc:
+            message = f"RunPod direct test failed: {exc}"
+            print(message, file=sys.stderr)
+            return {"ok": False, "mode": "direct_test", "error": message, "seconds": round(time.time() - started, 3)}
+
     job_id = str(payload.get("job_id") or "").strip()
     backend_url = str(payload.get("backend_url") or os.environ.get("BACKEND_URL") or "").rstrip("/")
     worker_token = str(payload.get("worker_token") or os.environ.get("WORKER_TOKEN") or "")
