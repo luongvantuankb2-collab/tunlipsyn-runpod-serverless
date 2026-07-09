@@ -147,6 +147,7 @@ def _result_payload(result_path: Path, logs: list[str], started: float) -> dict[
 
 
 def _direct_lipsync_test(payload: dict[str, Any], started: float) -> dict[str, Any]:
+    os.environ["RENDER_BACKEND"] = "latentsync"
     job_id = str(payload.get("job_id") or f"direct_{int(started)}")
     job_dir = WORK_DIR / job_id
     job_dir.mkdir(parents=True, exist_ok=True)
