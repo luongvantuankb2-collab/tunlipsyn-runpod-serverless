@@ -1,0 +1,840 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Tun Lipsync Studio</title>
+    <link rel="stylesheet" href="{{ base_path }}/static/app.css?v=12" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <div class="brand-block">
+          <p class="eyebrow">Production workspace</p>
+          <h1>Tun Lipsync Studio</h1>
+          <p class="subtle">Tạo giọng nói, ghép audio và render video lipsync bằng GPU.</p>
+        </div>
+        <div class="top-metrics" aria-label="Trạng thái hệ thống">
+          <div class="metric">
+            <span id="workerState" class="metric-value">...</span>
+            <small>Worker</small>
+          </div>
+          <div class="metric">
+            <span id="queueState" class="metric-value">0 / 0</span>
+            <small>Chờ / chạy</small>
+          </div>
+          <button id="refreshBtn" class="ghost-button" type="button">Làm mới</button>
+        </div>
+      </header>
+
+      <section id="notice" class="notice hidden" role="status">
+        <strong id="noticeTitle"></strong>
+        <span id="noticeText"></span>
+      </section>
+
+      <section class="workspace">
+        <section class="composer">
+          <div class="panel-head">
+            <div>
+              <h2>Tạo video</h2>
+              <p class="subtle">Quy trình thương mại: chọn video, chọn nguồn âm thanh, gửi vào hàng đợi GPU.</p>
+            </div>
+            <span id="audioReadyBadge" class="ready-badge">Chưa có audio</span>
+          </div>
+
+          <form id="renderForm" class="flow-form">
+            <section class="flow-step">
+              <div class="step-num">1</div>
+              <div class="step-content">
+                <div class="step-title">
+                  <h3>Video nhân vật</h3>
+                  <p>Ưu tiên mặt rõ, chính diện, ánh sáng ổn định và ít che miệng.</p>
+                </div>
+                <div class="field-grid">
+                  <label>
+                    Tên dự án
+                    <input name="title" placeholder="VD: Campaign 01 - Hero video" autocomplete="off" />
+                  </label>
+                  <label>
+                    Video đầu vào
+                    <input id="videoInput" name="video" type="file" accept="video/*" required />
+                  </label>
+                </div>
+              </div>
+            </section>
+
+            <section class="flow-step">
+              <div class="step-num">2</div>
+              <div class="step-content">
+                <div class="step-title">
+                  <h3>Nguồn âm thanh</h3>
+                  <p>Upload audio có sẵn hoặc tạo audio từ text trước khi render.</p>
+                </div>
+
+                <div class="segmented" role="tablist" aria-label="Nguồn âm thanh">
+                  <button id="uploadModeBtn" class="active" type="button">Upload audio</button>
+                  <button id="voiceModeBtn" type="button">Text thành giọng</button>
+                </div>
+
+                <div id="uploadAudioPanel" class="audio-panel">
+                  <label>
+                    File audio
+                    <input id="audioInput" name="audio" type="file" accept="audio/*" />
+                  </label>
+                  <audio id="localAudioPreview" class="compact-player" controls></audio>
+                </div>
+
+                <div id="voicePanel" class="voice-panel hidden">
+                  <label class="full-span">
+                    Nội dung cần đọc
+                    <textarea id="voiceText" name="text" placeholder="Nhập lời thoại tiếng Việt..."></textarea>
+                  </label>
+
+                  <div class="segmented voice-source full-span" role="tablist" aria-label="Kiểu giọng">
+                    <button id="presetVoiceBtn" class="active" type="button">Giọng có sẵn</button>
+                    <button id="cloneVoiceBtn" type="button">Clone giọng</button>
+                  </div>
+
+                  <label id="voiceNameRow">
+                    Chọn giọng
+                    <select id="voiceName" name="voice_name">
+                      <option value="ngoc_lan">Ngọc Lan</option>
+                      <option value="gia_bao">Gia Bảo</option>
+                      <option value="thai_son">Thái Sơn</option>
+                      <option value="duc_tri">Đức Trí</option>
+                      <option value="my_duyen">Mỹ Duyên</option>
+                      <option value="truc_ly">Trúc Ly</option>
+                      <option value="xuan_vinh">Xuân Vĩnh</option>
+                      <option value="trong_huu">Trọng Hữu</option>
+                      <option value="binh_an">Bình An</option>
+                      <option value="ngoc_linh">Ngọc Linh</option>
+                    </select>
+                  </label>
+
+                  <label id="voiceSampleRow" class="hidden">
+                    Mẫu giọng
+                    <input id="voiceSample" name="sample" type="file" accept="audio/*" />
+                  </label>
+
+                  <label>
+                    Phong cách
+                    <select id="voicePreset" name="voice_preset">
+                      <option value="balanced" selected>Cân bằng</option>
+                      <option value="expressive">Biểu cảm</option>
+                      <option value="clean">Rõ chữ</option>
+                    </select>
+                  </label>
+
+                  <label>
+                    Ngôn ngữ
+                    <select id="voiceLanguage" name="language">
+                      <option value="vi">Tiếng Việt</option>
+                      <option value="en">English</option>
+                    </select>
+                  </label>
+
+                  <div class="voice-actions full-span">
+                    <button id="voiceSubmitBtn" class="hidden" type="button">Tạo audio</button>
+                    <p id="voiceMessage" class="inline-message">Bấm Render video để hệ thống tự tạo audio rồi nhép miệng trong một job.</p>
+                  </div>
+
+                  <div id="generatedAudioBox" class="generated-audio full-span hidden">
+                    <div>
+                      <strong>Audio đã tạo</strong>
+                      <small id="generatedAudioName"></small>
+                    </div>
+                    <audio id="generatedAudioPreview" class="compact-player" controls></audio>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section class="flow-step">
+              <div class="step-num">3</div>
+              <div class="step-content">
+                <div class="step-title">
+                  <h3>Render lipsync</h3>
+                  <p>Giữ khung video gốc, chỉ xử lý vùng mặt/miệng cần lipsync.</p>
+                </div>
+                <div class="render-grid">
+                  <label>
+                    Model nhép miệng
+                    <select name="lipsync_model">
+                      <option value="v15" selected>LatentSync v1.5 / 256px / 8GB</option>
+                      <option value="v16">LatentSync v1.6 / 256px / 18GB</option>
+                      <option value="efficient">LatentSync v1.6 Efficient / 256px</option>
+                      <option value="high512">LatentSync v1.6 / 512px / GPU lớn</option>
+                      <option value="auto">Auto theo GPU</option>
+                    </select>
+                  </label>
+                  <label>
+                    Chất lượng encode
+                    <select name="preset">
+                      <option value="auto">Auto / nhanh</option>
+                      <option value="pro">Pro</option>
+                      <option value="ultra" selected>Ultra</option>
+                    </select>
+                  </label>
+                  <label>
+                    Steps
+                    <input name="latentsync_steps" type="number" min="5" max="80" step="1" value="40" />
+                  </label>
+                  <label>
+                    Guidance
+                    <input name="latentsync_guidance" type="number" min="0.5" max="5" step="0.1" value="1.8" />
+                  </label>
+                  <label>
+                    Zoom vùng mặt
+                    <input name="crop_scale" type="number" min="0.55" max="1" step="0.01" value="0.75" />
+                  </label>
+                  <label>
+                    Ghép kết quả
+                    <select name="mouth_mask_overlay">
+                      <option value="off" selected>Ghep crop day du</option>
+                      <option value="on">Chi ghep mieng mem</option>
+                    </select>
+                  </label>
+                  <label>
+                    Mask X
+                    <input name="mouth_mask_x" type="number" min="0" max="1" step="0.01" value="0.32" />
+                  </label>
+                  <label>
+                    Mask Y
+                    <input name="mouth_mask_y" type="number" min="0" max="1" step="0.01" value="0.26" />
+                  </label>
+                  <label>
+                    Mask W
+                    <input name="mouth_mask_w" type="number" min="0.05" max="1" step="0.01" value="0.36" />
+                  </label>
+                  <label>
+                    Mask H
+                    <input name="mouth_mask_h" type="number" min="0.05" max="1" step="0.01" value="0.22" />
+                  </label>
+                  <label class="check-row">
+                    <input name="keep_original_frame" type="checkbox" checked />
+                    <span>Giữ khung video gốc</span>
+                  </label>
+                  <label class="check-row">
+                    <input name="latentsync_deepcache" type="checkbox" />
+                    <span>Bật DeepCache</span>
+                  </label>
+                  <input type="hidden" name="enhance_video" value="off" />
+                  <input type="hidden" name="enhance_backend" value="realbasicvsr" />
+                  <button id="submitBtn" class="primary-action" type="submit">Render video</button>
+                </div>
+                <p id="formMessage" class="inline-message"></p>
+              </div>
+            </section>
+          </form>
+        </section>
+
+        <aside class="detail-panel">
+          <div class="panel-head">
+            <div>
+              <h2>Preview</h2>
+              <p class="subtle">Xem kết quả, tải file hoặc kiểm tra log.</p>
+            </div>
+            <span id="selectedId" class="mono"></span>
+          </div>
+
+          <div id="detailEmpty" class="empty-state">Chọn một job trong hàng đợi để xem chi tiết.</div>
+          <div id="detailBody" class="detail hidden">
+            <video id="preview" controls></video>
+            <audio id="audioPreview" controls></audio>
+            <div id="jobTiming" class="timing-grid"></div>
+
+            <form id="voiceToVideoForm" class="voice-to-video hidden">
+              <label>
+                Video nhân vật
+                <input name="video" type="file" accept="video/*" required />
+              </label>
+              <input type="hidden" name="preset" value="ultra" />
+              <input type="hidden" name="lipsync_model" value="v15" />
+              <input type="hidden" name="latentsync_steps" value="40" />
+              <input type="hidden" name="latentsync_guidance" value="1.8" />
+              <input type="hidden" name="crop_scale" value="0.75" />
+              <input type="hidden" name="keep_original_frame" value="on" />
+              <input type="hidden" name="mouth_mask_overlay" value="off" />
+              <input type="hidden" name="enhance_video" value="off" />
+              <input type="hidden" name="enhance_backend" value="realbasicvsr" />
+              <button id="voiceToVideoBtn" type="submit">Dùng audio này tạo video</button>
+              <p id="voiceToVideoMessage" class="inline-message"></p>
+            </form>
+
+            <div id="jobErrorBox" class="job-error hidden">
+              <strong id="jobErrorTitle"></strong>
+              <span id="jobErrorAction"></span>
+            </div>
+
+            <div class="detail-actions">
+              <a id="downloadBtn" class="link-button" href="#">Tải kết quả</a>
+              <button id="retryBtn" type="button">Chạy lại</button>
+              <button id="deleteBtn" class="danger" type="button">Xóa</button>
+            </div>
+
+            <details class="log-panel">
+              <summary>Log kỹ thuật</summary>
+              <pre id="logs"></pre>
+            </details>
+          </div>
+        </aside>
+      </section>
+
+      <section class="ops-grid">
+        <section class="jobs-panel">
+          <div class="panel-head">
+            <div>
+              <h2>Hàng đợi & lịch sử</h2>
+              <p class="subtle">Theo dõi toàn bộ job audio/video.</p>
+            </div>
+            <div class="filter-tabs" aria-label="Lọc job">
+              <button class="active" data-filter="all" type="button">Tất cả</button>
+              <button data-filter="processing" type="button">Đang chạy</button>
+              <button data-filter="failed" type="button">Lỗi</button>
+            </div>
+          </div>
+          <div id="jobsBody" class="job-list"></div>
+        </section>
+
+        <section class="errors-panel">
+          <div class="panel-head">
+            <div>
+              <h2>Bảng lỗi chuẩn</h2>
+              <p class="subtle">Thông điệp khách hàng nhìn thấy khi có sự cố.</p>
+            </div>
+          </div>
+          <div id="errorCatalog" class="error-catalog"></div>
+        </section>
+      </section>
+    </main>
+
+    <script>
+      const BASE_PATH = {{ base_path|tojson }};
+      function appUrl(path) {
+        const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+        return `${BASE_PATH}${normalizedPath}`;
+      }
+      function apiUrl(path) {
+        return appUrl(path);
+      }
+      const STABLE_LIPSYNC_PROFILE = {
+        lipsync_model: "v15",
+        latentsync_steps: "40",
+        latentsync_guidance: "1.8",
+        crop_scale: "0.75",
+        mouth_mask_overlay: "off",
+        mouth_mask_x: "0.32",
+        mouth_mask_y: "0.26",
+        mouth_mask_w: "0.36",
+        mouth_mask_h: "0.22",
+        keep_original_frame: "on",
+        latentsync_deepcache: "off",
+      };
+
+      const $ = (selector) => document.querySelector(selector);
+      const jobsBody = $("#jobsBody");
+      const renderForm = $("#renderForm");
+      const formMessage = $("#formMessage");
+      const voiceMessage = $("#voiceMessage");
+      const submitBtn = $("#submitBtn");
+      const voiceSubmitBtn = $("#voiceSubmitBtn");
+      const refreshBtn = $("#refreshBtn");
+      const workerState = $("#workerState");
+      const queueState = $("#queueState");
+      const detailEmpty = $("#detailEmpty");
+      const detailBody = $("#detailBody");
+      const selectedId = $("#selectedId");
+      const preview = $("#preview");
+      const audioPreview = $("#audioPreview");
+      const localAudioPreview = $("#localAudioPreview");
+      const generatedAudioPreview = $("#generatedAudioPreview");
+      const generatedAudioBox = $("#generatedAudioBox");
+      const generatedAudioName = $("#generatedAudioName");
+      const audioReadyBadge = $("#audioReadyBadge");
+      const uploadModeBtn = $("#uploadModeBtn");
+      const voiceModeBtn = $("#voiceModeBtn");
+      const uploadAudioPanel = $("#uploadAudioPanel");
+      const voicePanel = $("#voicePanel");
+      const audioInput = $("#audioInput");
+      const videoInput = $("#videoInput");
+      const voiceText = $("#voiceText");
+      const voiceSample = $("#voiceSample");
+      const voiceSampleRow = $("#voiceSampleRow");
+      const voiceName = $("#voiceName");
+      const voiceNameRow = $("#voiceNameRow");
+      const presetVoiceBtn = $("#presetVoiceBtn");
+      const cloneVoiceBtn = $("#cloneVoiceBtn");
+      const voicePreset = $("#voicePreset");
+      const voiceLanguage = $("#voiceLanguage");
+      const voiceToVideoForm = $("#voiceToVideoForm");
+      const voiceToVideoBtn = $("#voiceToVideoBtn");
+      const voiceToVideoMessage = $("#voiceToVideoMessage");
+      const logs = $("#logs");
+      const jobTiming = $("#jobTiming");
+      const downloadBtn = $("#downloadBtn");
+      const retryBtn = $("#retryBtn");
+      const deleteBtn = $("#deleteBtn");
+      const notice = $("#notice");
+      const noticeTitle = $("#noticeTitle");
+      const noticeText = $("#noticeText");
+      const errorCatalog = $("#errorCatalog");
+      const jobErrorBox = $("#jobErrorBox");
+      const jobErrorTitle = $("#jobErrorTitle");
+      const jobErrorAction = $("#jobErrorAction");
+
+      let currentJobId = null;
+      let audioMode = "upload";
+      let synthesisMode = "preset";
+      let generatedVoiceJobId = null;
+      let generatedVoiceReady = false;
+      let currentFilter = "all";
+      let lastJobs = [];
+      let errorMap = {};
+
+      const workerErrorHints = [
+        ["LatentSync script not found", ["Thiếu engine LatentSync.", "Kiểm tra LATENTSYNC_DIR và file inference trong engine."]],
+        ["latentsync_unet.pt", ["Thiếu checkpoint LatentSync.", "Kiểm tra đường dẫn LATENTSYNC_CHECKPOINT."]],
+        ["ffmpeg", ["Không tìm thấy FFmpeg hoặc FFmpeg chạy lỗi.", "Kiểm tra ffmpeg.exe trong portable root hoặc PATH của worker."]],
+        ["CUDA", ["GPU/CUDA chưa sẵn sàng.", "Kiểm tra driver NVIDIA, PyTorch CUDA và worker GPU."]],
+        ["out of memory", ["GPU không đủ bộ nhớ.", "Thử video ngắn hơn, giảm độ phân giải hoặc chạy trên GPU lớn hơn."]],
+        ["VieNeu", ["Engine tạo giọng chưa sẵn sàng.", "Kiểm tra VIENEU_SCRIPT, VIENEU_PYTHON và file model tạo giọng."]],
+        ["did not create output", ["Worker không tạo được file kết quả.", "Mở log kỹ thuật để xem engine bị dừng ở bước nào."]],
+        ["Command failed", ["Engine xử lý thất bại.", "Kiểm tra log kỹ thuật, input file và cấu hình worker."]],
+      ];
+
+      function escapeHtml(value) {
+        return String(value ?? "").replace(/[&<>"']/g, (c) => ({
+          "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+        })[c]);
+      }
+
+      function formatError(error) {
+        if (!error) return { title: "Có lỗi xảy ra.", action: "Vui lòng thử lại hoặc kiểm tra log." };
+        if (error.message && error.action) return { title: error.message, action: error.action, detail: error.detail };
+        const text = String(error.message || error.detail || error);
+        for (const [needle, result] of workerErrorHints) {
+          if (text.toLowerCase().includes(needle.toLowerCase())) {
+            return { title: result[0], action: result[1], detail: text };
+          }
+        }
+        return { title: "Yêu cầu chưa xử lý được.", action: text.length > 220 ? "Mở log kỹ thuật để xem chi tiết." : text, detail: text };
+      }
+
+      async function readApiError(response) {
+        const fallback = { message: `Yêu cầu thất bại (${response.status}).`, action: "Vui lòng thử lại." };
+        try {
+          const payload = await response.json();
+          return payload.error || payload.detail || fallback;
+        } catch {
+          return fallback;
+        }
+      }
+
+      function showNotice(title, text, type = "info") {
+        noticeTitle.textContent = title;
+        noticeText.textContent = text;
+        notice.className = `notice ${type}`;
+      }
+
+      function clearNotice() {
+        notice.classList.add("hidden");
+      }
+
+      function setMessage(node, message, type = "info") {
+        node.textContent = message || "";
+        node.className = `inline-message ${type}`;
+      }
+
+      function setAudioMode(mode) {
+        audioMode = mode;
+        uploadModeBtn.classList.toggle("active", mode === "upload");
+        voiceModeBtn.classList.toggle("active", mode === "voice");
+        uploadAudioPanel.classList.toggle("hidden", mode !== "upload");
+        voicePanel.classList.toggle("hidden", mode !== "voice");
+        updateAudioReady();
+      }
+
+      function resetGeneratedVoice() {
+        generatedVoiceReady = false;
+        generatedVoiceJobId = null;
+        generatedAudioBox.classList.add("hidden");
+        updateAudioReady();
+      }
+
+      function setSynthesisMode(mode) {
+        synthesisMode = mode;
+        presetVoiceBtn.classList.toggle("active", mode === "preset");
+        cloneVoiceBtn.classList.toggle("active", mode === "clone");
+        voiceNameRow.classList.toggle("hidden", mode !== "preset");
+        voiceSampleRow.classList.toggle("hidden", mode !== "clone");
+        resetGeneratedVoice();
+      }
+
+      function updateAudioReady() {
+        const uploadReady = audioMode === "upload" && audioInput.files.length > 0;
+        const voiceReady = audioMode === "voice" && voiceText.value.trim() && (synthesisMode !== "clone" || voiceSample.files.length > 0);
+        audioReadyBadge.textContent = uploadReady || voiceReady ? (audioMode === "voice" ? "Text sẵn sàng" : "Audio sẵn sàng") : "Chưa có audio";
+        audioReadyBadge.classList.toggle("ok", uploadReady || voiceReady);
+      }
+
+      function formatDuration(seconds) {
+        const value = Math.max(0, Number(seconds || 0));
+        if (value < 1) return "0s";
+        const mins = Math.floor(value / 60);
+        const secs = Math.floor(value % 60);
+        if (mins < 1) return `${secs}s`;
+        const hours = Math.floor(mins / 60);
+        const remMins = mins % 60;
+        if (hours < 1) return `${mins}m ${secs}s`;
+        return `${hours}h ${remMins}m`;
+      }
+
+      function statusLabel(status) {
+        return {
+          queued: "Đang chờ",
+          processing: "Đang chạy",
+          done: "Hoàn tất",
+          failed: "Lỗi",
+        }[status] || status;
+      }
+
+      function kindLabel(job) {
+        if (job.kind === "voice_lipsync") return "Text → Video";
+        return job.kind === "voice" ? "Audio" : "Video";
+      }
+
+      function jobMessage(job) {
+        if (job.status === "failed") return formatError(job.message).title;
+        return job.message || statusLabel(job.status);
+      }
+
+      function renderJobCards(jobs) {
+        const filtered = jobs.filter((job) => currentFilter === "all" || job.status === currentFilter);
+        jobsBody.innerHTML = filtered.length ? filtered.map((job) => `
+          <article class="job-card ${job.id === currentJobId ? "selected" : ""}">
+            <div class="job-main">
+              <span class="kind-chip">${kindLabel(job)}</span>
+              <div>
+                <strong>${escapeHtml(job.title)}</strong>
+                <small>${job.id.slice(0, 8)} · ${escapeHtml(jobMessage(job))}</small>
+                <small>Chờ ${formatDuration(job.queue_seconds)} · chạy ${formatDuration(job.runtime_seconds)} · tổng ${formatDuration(job.total_seconds)}</small>
+              </div>
+            </div>
+            <div class="job-progress">
+              <span class="status ${job.status}">${statusLabel(job.status)}</span>
+              <div class="bar"><span style="width:${Math.max(0, Math.min(100, job.progress || 0))}%"></span></div>
+              <small>${job.progress || 0}%</small>
+            </div>
+            <button type="button" onclick="selectJob('${job.id}')">Xem</button>
+          </article>
+        `).join("") : `<div class="empty-row">Chưa có job phù hợp bộ lọc.</div>`;
+      }
+
+      async function loadHealth() {
+        const [healthRes, workersRes] = await Promise.all([fetch(apiUrl("/api/health")), fetch(apiUrl("/api/workers"))]);
+        const health = await healthRes.json();
+        const workers = (await workersRes.json()).workers || [];
+        const online = workers.filter((worker) => worker.online);
+        workerState.textContent = online.length ? `${online.length} online` : "Offline";
+        workerState.className = `metric-value ${online.length ? "ok" : "warn"}`;
+        queueState.textContent = `${health.jobs.queued} / ${health.jobs.processing}`;
+      }
+
+      async function loadErrorCatalog() {
+        try {
+          const res = await fetch(apiUrl("/api/error-catalog"));
+          const data = await res.json();
+          errorMap = data.errors || {};
+          errorCatalog.innerHTML = Object.entries(errorMap).map(([code, item]) => `
+            <div class="error-row">
+              <code>${escapeHtml(code)}</code>
+              <div>
+                <strong>${escapeHtml(item.message)}</strong>
+                <small>${escapeHtml(item.action)}</small>
+              </div>
+            </div>
+          `).join("");
+        } catch {
+          errorCatalog.innerHTML = `<div class="empty-row">Không tải được bảng lỗi.</div>`;
+        }
+      }
+
+      async function loadJobs() {
+        try {
+          await loadHealth();
+          const res = await fetch(apiUrl("/api/jobs"));
+          if (!res.ok) throw await readApiError(res);
+          const data = await res.json();
+          lastJobs = data.jobs || [];
+          renderJobCards(lastJobs);
+          if (currentJobId) await loadDetail(currentJobId, false);
+          clearNotice();
+        } catch (error) {
+          const friendly = formatError(error);
+          showNotice(friendly.title, friendly.action, "error");
+        }
+      }
+
+      async function selectJob(id) {
+        currentJobId = id;
+        await loadDetail(id, true);
+        renderJobCards(lastJobs);
+      }
+
+      async function loadDetail(id, showPanel) {
+        const res = await fetch(apiUrl(`/api/jobs/${id}`));
+        if (!res.ok) return;
+        const job = await res.json();
+        detailEmpty.classList.add("hidden");
+        detailBody.classList.remove("hidden");
+        selectedId.textContent = job.id.slice(0, 8);
+        logs.textContent = job.logs || "";
+        jobTiming.innerHTML = `
+          <div><strong>${formatDuration(job.queue_seconds)}</strong><small>Thời gian chờ</small></div>
+          <div><strong>${formatDuration(job.runtime_seconds)}</strong><small>Thời gian tạo</small></div>
+          <div><strong>${formatDuration(job.total_seconds)}</strong><small>Tổng thời gian</small></div>
+        `;
+        retryBtn.disabled = job.status === "processing";
+        downloadBtn.style.display = job.has_result ? "inline-flex" : "none";
+        preview.style.display = job.has_result && job.kind !== "voice" ? "block" : "none";
+        audioPreview.style.display = job.has_result && job.kind === "voice" ? "block" : "none";
+        voiceToVideoForm.classList.toggle("hidden", !(job.has_result && job.kind === "voice"));
+        setMessage(voiceToVideoMessage, "");
+
+        if (job.status === "failed") {
+          const friendly = formatError(job.message);
+          jobErrorTitle.textContent = friendly.title;
+          jobErrorAction.textContent = friendly.action;
+          jobErrorBox.classList.remove("hidden");
+        } else {
+          jobErrorBox.classList.add("hidden");
+        }
+
+        if (job.has_result) {
+          const previewUrl = apiUrl(`/api/jobs/${job.id}/preview?t=${job.updated_at}`);
+          if (job.kind === "voice") {
+            audioPreview.src = previewUrl;
+            preview.removeAttribute("src");
+          } else {
+            preview.src = previewUrl;
+            audioPreview.removeAttribute("src");
+          }
+          downloadBtn.href = apiUrl(`/api/jobs/${job.id}/download`);
+        } else {
+          preview.removeAttribute("src");
+          audioPreview.removeAttribute("src");
+        }
+        if (showPanel) logs.scrollTop = logs.scrollHeight;
+      }
+
+      async function waitForJob(id, onTick) {
+        for (let i = 0; i < 240; i++) {
+          const res = await fetch(apiUrl(`/api/jobs/${id}`));
+          if (!res.ok) throw await readApiError(res);
+          const job = await res.json();
+          if (onTick) onTick(job);
+          if (job.status === "done" || job.status === "failed") return job;
+          await new Promise((resolve) => setTimeout(resolve, 2500));
+        }
+        throw { message: "Job xử lý quá lâu.", action: "Vui lòng kiểm tra worker hoặc xem lại trong hàng đợi." };
+      }
+
+      function appendRenderSettings(body, formData) {
+        Object.entries(STABLE_LIPSYNC_PROFILE).forEach(([key, value]) => {
+          if (key !== "keep_original_frame" && key !== "latentsync_deepcache") body.append(key, value);
+        });
+        [
+          "preset",
+          "enhance_video",
+          "enhance_backend",
+        ].forEach((key) => body.append(key, formData.get(key) || ""));
+        body.append("keep_original_frame", STABLE_LIPSYNC_PROFILE.keep_original_frame);
+        body.append("latentsync_deepcache", STABLE_LIPSYNC_PROFILE.latentsync_deepcache);
+      }
+
+      async function createVoiceJob() {
+        if (!voiceText.value.trim()) throw { message: "Bạn chưa nhập nội dung cần đọc.", action: "Nhập lời thoại trước khi tạo audio." };
+        if (synthesisMode === "clone" && !voiceSample.files.length) throw { message: "Chưa có mẫu giọng để clone.", action: "Chọn file audio mẫu trước." };
+        voiceSubmitBtn.disabled = true;
+        setMessage(voiceMessage, "Đang gửi job tạo audio...", "info");
+        generatedVoiceReady = false;
+        generatedVoiceJobId = null;
+        updateAudioReady();
+
+        const body = new FormData();
+        body.append("title", voiceText.value.trim().slice(0, 42) || "Voice job");
+        body.append("text", voiceText.value.trim());
+        body.append("voice_mode", synthesisMode);
+        body.append("voice_name", voiceName.value);
+        if (synthesisMode === "clone") body.append("sample", voiceSample.files[0]);
+        body.append("voice_preset", voicePreset.value);
+        body.append("language", voiceLanguage.value);
+
+        try {
+          const res = await fetch(apiUrl("/api/voice-jobs"), { method: "POST", body });
+          if (!res.ok) throw await readApiError(res);
+          const data = await res.json();
+          generatedVoiceJobId = data.job_id;
+          currentJobId = data.job_id;
+          await loadJobs();
+          const job = await waitForJob(data.job_id, (item) => {
+            setMessage(voiceMessage, `${statusLabel(item.status)} · ${item.message || ""}`, "info");
+          });
+          if (job.status !== "done") throw { message: job.message || "Tạo audio thất bại.", action: "Mở log kỹ thuật để xem chi tiết." };
+          generatedVoiceReady = true;
+          generatedAudioName.textContent = job.id.slice(0, 8);
+          generatedAudioPreview.src = apiUrl(`/api/jobs/${job.id}/preview?t=${job.updated_at}`);
+          generatedAudioBox.classList.remove("hidden");
+          setMessage(voiceMessage, "Audio đã sẵn sàng để render video.", "success");
+          updateAudioReady();
+          await loadJobs();
+        } finally {
+          voiceSubmitBtn.disabled = false;
+        }
+      }
+
+      async function submitRender(event) {
+        event.preventDefault();
+        if (!videoInput.files.length) {
+          setMessage(formMessage, "Chọn video nhân vật trước.", "error");
+          return;
+        }
+
+        submitBtn.disabled = true;
+        setMessage(formMessage, "Đang gửi job video...", "info");
+        const formData = new FormData(renderForm);
+        const title = formData.get("title") || "Lipsync job";
+
+        try {
+          let res;
+          if (audioMode === "upload") {
+            if (!audioInput.files.length) throw { message: "Chưa có file audio.", action: "Chọn audio giọng nói trước khi render." };
+            const body = new FormData();
+            body.append("title", title);
+            body.append("video", videoInput.files[0]);
+            body.append("audio", audioInput.files[0]);
+            appendRenderSettings(body, formData);
+            res = await fetch(apiUrl("/api/jobs"), { method: "POST", body });
+          } else {
+            if (!voiceText.value.trim()) throw { message: "Bạn chưa nhập nội dung cần đọc.", action: "Nhập lời thoại trước khi render." };
+            if (synthesisMode === "clone" && !voiceSample.files.length) throw { message: "Chưa có mẫu giọng để clone.", action: "Chọn file audio mẫu trước." };
+            const body = new FormData();
+            body.append("title", title);
+            body.append("video", videoInput.files[0]);
+            body.append("text", voiceText.value.trim());
+            body.append("voice_mode", synthesisMode);
+            body.append("voice_name", voiceName.value);
+            body.append("voice_preset", voicePreset.value);
+            body.append("language", voiceLanguage.value);
+            if (synthesisMode === "clone") body.append("sample", voiceSample.files[0]);
+            appendRenderSettings(body, formData);
+            res = await fetch(apiUrl("/api/voice-lipsync-jobs"), { method: "POST", body });
+          }
+          if (!res.ok) throw await readApiError(res);
+          const data = await res.json();
+          currentJobId = data.job_id;
+          setMessage(formMessage, "Đã tạo job video. Worker sẽ xử lý theo hàng đợi.", "success");
+          await loadJobs();
+          await loadDetail(currentJobId, true);
+        } catch (error) {
+          const friendly = formatError(error);
+          setMessage(formMessage, `${friendly.title} ${friendly.action}`, "error");
+        } finally {
+          submitBtn.disabled = false;
+        }
+      }
+
+      async function retryJob(id) {
+        const res = await fetch(apiUrl(`/api/jobs/${id}/retry`), { method: "POST" });
+        if (!res.ok) {
+          const friendly = formatError(await readApiError(res));
+          showNotice(friendly.title, friendly.action, "error");
+          return;
+        }
+        await loadJobs();
+      }
+
+      async function deleteJob(id) {
+        if (!confirm("Xóa job này?")) return;
+        const res = await fetch(apiUrl(`/api/jobs/${id}`), { method: "DELETE" });
+        if (!res.ok) {
+          const friendly = formatError(await readApiError(res));
+          showNotice(friendly.title, friendly.action, "error");
+          return;
+        }
+        currentJobId = null;
+        detailBody.classList.add("hidden");
+        detailEmpty.classList.remove("hidden");
+        await loadJobs();
+      }
+
+      uploadModeBtn.addEventListener("click", () => setAudioMode("upload"));
+      voiceModeBtn.addEventListener("click", () => setAudioMode("voice"));
+      presetVoiceBtn.addEventListener("click", () => setSynthesisMode("preset"));
+      cloneVoiceBtn.addEventListener("click", () => setSynthesisMode("clone"));
+      audioInput.addEventListener("change", () => {
+        if (audioInput.files.length) {
+          localAudioPreview.src = URL.createObjectURL(audioInput.files[0]);
+          localAudioPreview.style.display = "block";
+        } else {
+          localAudioPreview.removeAttribute("src");
+        }
+        updateAudioReady();
+      });
+      [voiceText, voiceSample, voiceName, voicePreset, voiceLanguage].forEach((node) => {
+        node.addEventListener("input", resetGeneratedVoice);
+        node.addEventListener("change", resetGeneratedVoice);
+      });
+      voiceSubmitBtn.addEventListener("click", async () => {
+        try {
+          await createVoiceJob();
+        } catch (error) {
+          const friendly = formatError(error);
+          setMessage(voiceMessage, `${friendly.title} ${friendly.action}`, "error");
+          voiceSubmitBtn.disabled = false;
+        }
+      });
+      renderForm.addEventListener("submit", submitRender);
+      voiceToVideoForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        if (!currentJobId) return;
+        voiceToVideoBtn.disabled = true;
+        setMessage(voiceToVideoMessage, "Đang upload video...", "info");
+        const body = new FormData(voiceToVideoForm);
+        body.append("title", `Video từ audio ${currentJobId.slice(0, 8)}`);
+        body.append("enhance_video", "off");
+        body.append("enhance_backend", "realbasicvsr");
+        try {
+          const res = await fetch(apiUrl(`/api/voice-jobs/${currentJobId}/lipsync`), { method: "POST", body });
+          if (!res.ok) throw await readApiError(res);
+          const data = await res.json();
+          voiceToVideoForm.reset();
+          setMessage(voiceToVideoMessage, "Đã tạo job video từ audio này.", "success");
+          currentJobId = data.job_id;
+          await loadJobs();
+        } catch (error) {
+          const friendly = formatError(error);
+          setMessage(voiceToVideoMessage, `${friendly.title} ${friendly.action}`, "error");
+        } finally {
+          voiceToVideoBtn.disabled = false;
+        }
+      });
+      document.querySelectorAll(".filter-tabs button").forEach((button) => {
+        button.addEventListener("click", () => {
+          currentFilter = button.dataset.filter;
+          document.querySelectorAll(".filter-tabs button").forEach((item) => item.classList.toggle("active", item === button));
+          renderJobCards(lastJobs);
+        });
+      });
+      retryBtn.addEventListener("click", () => currentJobId && retryJob(currentJobId));
+      deleteBtn.addEventListener("click", () => currentJobId && deleteJob(currentJobId));
+      refreshBtn.addEventListener("click", loadJobs);
+
+      setAudioMode("upload");
+      setSynthesisMode("preset");
+      loadErrorCatalog();
+      loadJobs();
+      setInterval(loadJobs, 3500);
+    </script>
+  </body>
+</html>

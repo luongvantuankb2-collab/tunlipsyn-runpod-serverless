@@ -1,0 +1,39 @@
+1. Build/push worker image from Windows:
+   cd D:\tunlipsyn_runpod_serverless_ready
+   .\build_runpod_image.ps1 -Image YOUR_DOCKER_USER/tunlipsyn-runpod-worker:v1
+
+2. Create RunPod Serverless endpoint with that image:
+   workers min = 0
+   workers max = 1
+   GPU = RTX 4090
+   timeout = 900-1800s
+
+3. Upload this folder to your web/VPS machine, then run:
+   cd /workspace/tunlipsyn_runpod_serverless_ready
+   bash setup_web_serverless.sh
+   nano web_saas/.env
+
+4. Set these in web_saas/.env:
+   PUBLIC_BASE_URL=http://YOUR_WEB_HOST:8080
+   WORKER_BASE_URL=http://YOUR_WEB_HOST:8080
+   RUNPOD_CALLBACK_BASE_URL=http://YOUR_WEB_HOST:8080
+   WORKER_TOKEN=the-same-secret-used-by-backend-and-worker-payload
+   RUNPOD_DISPATCH_ENABLED=1
+   RUNPOD_API_KEY=your-runpod-api-key
+   RUNPOD_ENDPOINT_ID=your-runpod-endpoint-id
+
+5. Start web:
+   mkdir -p logs
+   nohup bash start_web_serverless.sh > logs/web.log 2>&1 &
+   sleep 5
+   curl -s http://127.0.0.1:8080/api/health
+
+6. Open:
+   http://YOUR_WEB_HOST:8080
+
+Expected job log:
+   RunPod serverless job dispatched
+   RunPod worker claimed job
+   Preflight: LatentSync v1.5 256 / 8GB
+   LatentSync params: steps=40, guidance=1.8, crop=0.75
+   Worker uploaded result

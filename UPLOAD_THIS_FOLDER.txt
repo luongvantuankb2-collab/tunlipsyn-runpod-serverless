@@ -1,0 +1,6 @@
+UPLOAD THU MUC NAY LEN GITHUB
+
+Keo TOAN BO NOI DUNG ben trong thu muc nay len GitHub:
+D:\tunlipsyn_runpod_github_upload
+
+Khong keo thu muc D:\tunlipsyn_runpod_serverless_ready vi thu muc do co engines va qua nhieu file.

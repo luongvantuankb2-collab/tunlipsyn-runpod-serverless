@@ -1,0 +1,81 @@
+MUC TIEU
+Dung GitHub Actions de build/push Docker image len GHCR.
+May Windows cua ban khong can cai Docker.
+
+BUOC 1 - Tao GitHub repo moi
+1. Vao https://github.com/new
+2. Repository name: tunlipsyn-runpod-serverless
+3. Chon Private hoac Public deu duoc.
+4. Bam Create repository.
+
+BUOC 2 - Upload thu muc len GitHub
+Neu khong muon dung git lenh, dung cach web:
+1. Mo repo vua tao.
+2. Bam Add file -> Upload files.
+3. Keo tha TOAN BO noi dung trong thu muc upload nhe:
+   D:\tunlipsyn_runpod_github_upload
+4. Bam Commit changes.
+
+Neu GitHub web khong cho upload qua nhieu file, dung git lenh:
+   cd D:\tunlipsyn_runpod_serverless_ready
+   git init
+   git branch -M main
+   git add .
+   git commit -m "RunPod serverless worker"
+   git remote add origin https://github.com/YOUR_GITHUB_USER/tunlipsyn-runpod-serverless.git
+   git push -u origin main
+
+BUOC 3 - Chay GitHub Actions build image
+1. Mo repo tren GitHub.
+2. Vao tab Actions.
+3. Chon workflow: Build RunPod Worker Image.
+4. Bam Run workflow.
+5. Cho build xong. Lan dau co the rat lau vi tai torch/model.
+
+BUOC 4 - Lay ten image de dien vao RunPod
+Image se co dang:
+   ghcr.io/YOUR_GITHUB_USER/tunlipsyn-runpod-serverless/tunlipsyn-runpod-worker:latest
+
+Vi du neu GitHub user la aidoldev:
+   ghcr.io/aidoldev/tunlipsyn-runpod-serverless/tunlipsyn-runpod-worker:latest
+
+BUOC 5 - Neu repo/package private
+RunPod can registry auth:
+1. GitHub -> Settings -> Developer settings -> Personal access tokens.
+2. Tao token co quyen read:packages.
+3. Trong RunPod bam Select registry authentication.
+4. Registry: ghcr.io
+5. Username: GitHub username
+6. Password/token: token vua tao
+
+Neu muon don gian hon:
+1. Vao GitHub repo -> Packages.
+2. Chon package image.
+3. Package settings -> Change visibility -> Public.
+4. RunPod se keo image khong can auth.
+
+BUOC 6 - Dien RunPod Serverless
+Container image:
+   ghcr.io/YOUR_GITHUB_USER/tunlipsyn-runpod-serverless/tunlipsyn-runpod-worker:latest
+
+Start command:
+   De trong
+
+Container disk:
+   50 GB
+
+Queue:
+   Chon Queue
+
+Environment variables:
+   LATENTSYNC_FORCE_STABLE_PROFILE=1
+   LATENTSYNC_MODEL_PRESET=v15
+   LATENTSYNC_STEPS=40
+   LATENTSYNC_GUIDANCE=1.8
+   LATENTSYNC_CROP_SCALE=0.75
+   LATENTSYNC_PREP_WIDTH=512
+   WORK_DIR=/workspace/work
+   VOICE_BACKEND=vieneu
+
+GHI CHU
+Neu GitHub Actions bi loi het disk khi build image, chuyen sang build tren RunPod Pod tam thoi hoac GitHub runner lon hon.
