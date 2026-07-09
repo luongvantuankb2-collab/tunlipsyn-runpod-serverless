@@ -18,7 +18,7 @@ if [ ! -f engines/LatentSync/checkpoints/sd-vae-ft-mse/config.json ]; then
     --local-dir engines/LatentSync/checkpoints/sd-vae-ft-mse
 fi
 
-if [ ! -f engines/LatentSync/checkpoints/auxiliary/models/buffalo_l/det_10g.onnx ]; then
+if [ ! -f engines/LatentSync/checkpoints/auxiliary/models/det_10g.onnx ]; then
   echo "[models] Downloading InsightFace buffalo_l"
   mkdir -p engines/LatentSync/checkpoints/auxiliary/models
   python - <<'PY'
@@ -75,7 +75,7 @@ require_file engines/LatentSync/checkpoints/latentsync_unet_v15.pt
 require_file engines/LatentSync/checkpoints/latentsync_unet.pt
 require_file engines/LatentSync/checkpoints/whisper/tiny.pt
 require_file engines/LatentSync/checkpoints/sd-vae-ft-mse/config.json
-require_file engines/LatentSync/checkpoints/auxiliary/models/buffalo_l/det_10g.onnx
+require_file engines/LatentSync/checkpoints/auxiliary/models/det_10g.onnx
 
 if [ "$missing" -ne 0 ]; then
   echo "[models] Final model tree for debugging:"
@@ -87,3 +87,4 @@ fi
 find engines/LatentSync/checkpoints voice_models/vieneu -type d -name .cache -prune -exec rm -rf {} + || true
 
 echo "[models] Ready"
+
