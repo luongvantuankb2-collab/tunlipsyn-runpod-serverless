@@ -58,9 +58,9 @@ COPY voice_models /workspace/tunlipsyn/voice_models
 COPY download_checkpoints_ezycloud.sh /workspace/tunlipsyn/download_checkpoints_ezycloud.sh
 COPY prepare_runpod_models.sh /workspace/tunlipsyn/prepare_runpod_models.sh
 
-RUN git clone --depth 1 https://github.com/ByteDance/LatentSync.git /workspace/tunlipsyn/engines/LatentSync \
-    && chmod +x /workspace/tunlipsyn/download_checkpoints_ezycloud.sh /workspace/tunlipsyn/prepare_runpod_models.sh \
-    && /workspace/tunlipsyn/prepare_runpod_models.sh
+RUN git clone --depth 1 https://github.com/ByteDance/LatentSync.git /workspace/tunlipsyn/engines/LatentSync
+RUN chmod +x /workspace/tunlipsyn/download_checkpoints_ezycloud.sh /workspace/tunlipsyn/prepare_runpod_models.sh
+RUN /workspace/tunlipsyn/prepare_runpod_models.sh
 
 ENV LATENTSYNC_DIR=/workspace/tunlipsyn/engines/LatentSync \
     LATENTSYNC_PYTHON=/opt/conda/bin/python \
@@ -76,3 +76,4 @@ ENV LATENTSYNC_DIR=/workspace/tunlipsyn/engines/LatentSync \
 
 WORKDIR /workspace/tunlipsyn/worker
 CMD ["python", "-u", "serverless_handler.py"]
+
